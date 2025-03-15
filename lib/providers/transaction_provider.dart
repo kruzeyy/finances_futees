@@ -22,8 +22,31 @@ class TransactionNotifier extends StateNotifier<List<Transaction>> {
     _box.delete(id);
     state = state.where((tx) => tx.id != id).toList();
   }
+
+  // ✅ **Ajout de la fonction pour modifier une transaction**
+  void editTransaction(String id, String newTitle, double newAmount, String newCategory) {
+    final transactionIndex = state.indexWhere((tx) => tx.id == id);
+    if (transactionIndex != -1) {
+      final updatedTransaction = Transaction(
+        id: id,
+        title: newTitle,
+        amount: newAmount,
+        date: state[transactionIndex].date, // On garde la même date
+        category: newCategory,
+      );
+
+      _box.put(id, updatedTransaction); // Mise à jour dans Hive
+
+      state = [
+        ...state.sublist(0, transactionIndex),
+        updatedTransaction,
+        ...state.sublist(transactionIndex + 1),
+      ];
+    }
+  }
 }
 
+// Fournisseur Riverpod pour gérer les transactions
 final transactionProvider =
 StateNotifierProvider<TransactionNotifier, List<Transaction>>((ref) {
   return TransactionNotifier();

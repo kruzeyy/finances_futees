@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/transaction.dart';
 import '../providers/transaction_provider.dart';
-import '../providers/theme_provider.dart'; // Import du provider de thème
+import '../providers/theme_provider.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart'; // Correction : ajout de l'import nécessaire
+import '../models/transaction.dart';
+import 'package:intl/intl.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -14,31 +14,28 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  String selectedMonth = DateFormat('MMMM yyyy', 'fr_FR').format(DateTime.now()); // Correction : s'assurer que intl est bien utilisé
+  String selectedMonth = DateFormat('MMMM yyyy', 'fr_FR').format(DateTime.now());
 
   @override
   Widget build(BuildContext context) {
     final transactions = ref.watch(transactionProvider);
     final isDarkMode = ref.watch(themeProvider);
 
-    // 📅 Obtenir la liste des mois uniques présents dans les transactions
     final List<String> months = transactions
         .map((tx) => DateFormat('MMMM yyyy', 'fr_FR').format(tx.date))
         .toSet()
         .toList()
       ..sort((a, b) => b.compareTo(a));
+
     if (months.isEmpty) {
-      months.add(DateFormat('MMMM yyyy', 'fr_FR').format(DateTime.now())); // Ajout du mois actuel si vide
+      months.add(DateFormat('MMMM yyyy', 'fr_FR').format(DateTime.now()));
     }
 
-    // 🔥 Filtrer les transactions en fonction du mois sélectionné
     final filteredTransactions = transactions.where((tx) {
       return DateFormat('MMMM yyyy', 'fr_FR').format(tx.date) == selectedMonth;
     }).toList();
 
-    // 🔥 Calculer le total des dépenses pour le mois sélectionné
-    double totalExpenses =
-    filteredTransactions.fold(0, (sum, tx) => sum + tx.amount);
+    double totalExpenses = filteredTransactions.fold(0, (sum, tx) => sum + tx.amount);
 
     return Scaffold(
       appBar: AppBar(
@@ -56,7 +53,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         children: [
           const SizedBox(height: 10),
 
-          // 🔥 Sélecteur de mois 📅
           DropdownButton<String>(
             value: selectedMonth,
             onChanged: (newValue) {
@@ -74,18 +70,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           const SizedBox(height: 10),
 
-          // 🔥 Affichage du total des dépenses
           Text(
             "Total des dépenses : ${totalExpenses.toStringAsFixed(2)}€",
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
 
           const SizedBox(height: 10),
 
-          // Graphique en camembert
           SizedBox(
             height: 200,
             child: buildChart(filteredTransactions),
@@ -93,7 +84,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           const SizedBox(height: 20),
 
-          // Liste des transactions filtrées
           Expanded(
             child: filteredTransactions.isEmpty
                 ? const Center(child: Text("Aucune transaction pour ce mois."))
@@ -117,7 +107,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text("${tx.date.day}/${tx.date.month}/${tx.date.year}"),
+                        IconButton(
+                          icon: const Icon(Icons.edit, color: Colors.blue),
+                          onPressed: () {
+                            _showEditTransactionDialog(context, ref, tx);
+                          },
+                        ),
                         IconButton(
                           icon: const Icon(Icons.delete, color: Colors.red),
                           onPressed: () {
@@ -146,7 +141,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return const Center(child: Text("Aucune donnée disponible"));
     }
 
-    // Dictionnaire de couleurs pour chaque catégorie
     final Map<String, Color> categoryColors = {
       "Courses": Colors.blue,
       "Transport": Colors.green,
@@ -165,7 +159,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         value: entry.value,
         title: "${entry.key}\n${entry.value.toStringAsFixed(2)}€",
         radius: 50,
-        color: categoryColors[entry.key] ?? Colors.black, // Attribuer la couleur
+        color: categoryColors[entry.key] ?? Colors.black,
       );
     }).toList();
 
@@ -179,7 +173,76 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  // 🔥 Fonction pour afficher la boîte de dialogue d'ajout de transaction
+  // 🔥 Boîte de dialogue pour modifier une transaction
+  void _showEditTransactionDialog(BuildContext context, WidgetRef ref, Transaction transaction) {
+    final titleController = TextEditingController(text: transaction.title);
+    final amountController = TextEditingController(text: transaction.amount.toString());
+    String selectedCategory = transaction.category;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text("Modifier la transaction"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                decoration: const InputDecoration(labelText: "Titre"),
+              ),
+              TextField(
+                controller: amountController,
+                decoration: const InputDecoration(labelText: "Montant (€)"),
+                keyboardType: TextInputType.number,
+              ),
+              DropdownButton<String>(
+                value: selectedCategory,
+                onChanged: (value) {
+                  setState(() {
+                    selectedCategory = value!;
+                  });
+                },
+                items: ["Courses", "Transport", "Loisirs", "Logement", "Autre"]
+                    .map((category) => DropdownMenuItem(
+                  value: category,
+                  child: Text(category),
+                ))
+                    .toList(),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text("Annuler"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final title = titleController.text;
+                final amount = double.tryParse(amountController.text) ?? 0;
+
+                if (title.isEmpty || amount <= 0) {
+                  return;
+                }
+
+                ref.read(transactionProvider.notifier).editTransaction(
+                  transaction.id,
+                  title,
+                  amount,
+                  selectedCategory,
+                );
+
+                Navigator.of(ctx).pop();
+              },
+              child: const Text("Modifier"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+  // 🔥 Boîte de dialogue pour ajouter une transaction
   void _showAddTransactionDialog(BuildContext context, WidgetRef ref) {
     final titleController = TextEditingController();
     final amountController = TextEditingController();
@@ -205,7 +268,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               DropdownButton<String>(
                 value: selectedCategory,
                 onChanged: (value) {
-                  selectedCategory = value!;
+                  setState(() {
+                    selectedCategory = value!;
+                  });
                 },
                 items: ["Courses", "Transport", "Loisirs", "Logement", "Autre"]
                     .map((category) => DropdownMenuItem(
