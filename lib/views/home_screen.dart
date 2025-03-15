@@ -1,11 +1,18 @@
+import 'dart:io';
+import 'package:csv/csv.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/theme_provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../models/transaction.dart';
 import 'package:intl/intl.dart';
+import 'package:file_picker/file_picker.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -71,6 +78,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onChanged: (value) {
               ref.read(themeProvider.notifier).toggleTheme();
             },
+          ),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == "CSV") {
+                _exportToCSV(filteredTransactions);
+              } else if (value == "PDF") {
+                _exportToPDF(filteredTransactions);
+              } else if (value == "PRINT_PDF") {
+                _printPDF(filteredTransactions);
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(value: "CSV", child: Text("Exporter en CSV 📄")),
+              const PopupMenuItem(value: "PDF", child: Text("Exporter en PDF 🖨️")),
+              const PopupMenuItem(value: "PRINT_PDF", child: Text("Imprimer le PDF 🖨️")),
+            ],
+            icon: const Icon(Icons.download),
           ),
         ],
       ),
@@ -373,6 +397,108 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         );
       },
+    );
+  }
+  Future<void> _exportToCSV(List<Transaction> transactions) async {
+    List<List<String>> csvData = [
+      ["Titre", "Montant (€)", "Catégorie", "Date"]
+    ];
+
+    csvData.addAll(transactions.map((tx) => [
+      tx.title,
+      tx.amount.toStringAsFixed(2),
+      tx.category,
+      DateFormat('dd/MM/yyyy').format(tx.date)
+    ]));
+
+    String csv = const ListToCsvConverter().convert(csvData);
+
+    // Permettre à l'utilisateur de choisir l'emplacement de sauvegarde
+    String? outputFile = await FilePicker.platform.saveFile(
+      dialogTitle: "Enregistrer le fichier CSV",
+      fileName: "transactions.csv",
+      type: FileType.custom,
+      allowedExtensions: ["csv"],
+    );
+
+    if (outputFile != null) {
+      final File file = File(outputFile);
+      await file.writeAsString(csv);
+
+      // Afficher un message de confirmation
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Fichier CSV enregistré à : $outputFile")),
+      );
+    }
+  }
+  Future<void> _exportToPDF(List<Transaction> transactions) async {
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.Page(
+        build: (pw.Context context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text("Rapport des Transactions", style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 20),
+            pw.Table.fromTextArray(
+              headers: ["Titre", "Montant (€)", "Catégorie", "Date"],
+              data: transactions.map((tx) => [
+                tx.title,
+                tx.amount.toStringAsFixed(2),
+                tx.category,
+                DateFormat('dd/MM/yyyy').format(tx.date)
+              ]).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    // Permettre à l'utilisateur de choisir l'emplacement de sauvegarde
+    String? outputFile = await FilePicker.platform.saveFile(
+      dialogTitle: "Enregistrer le fichier PDF",
+      fileName: "transactions.pdf",
+      type: FileType.custom,
+      allowedExtensions: ["pdf"],
+    );
+
+    if (outputFile != null) {
+      final File file = File(outputFile);
+      await file.writeAsBytes(await pdf.save());
+
+      // Afficher un message de confirmation
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Fichier PDF enregistré à : $outputFile")),
+      );
+    }
+  }
+  Future<void> _printPDF(List<Transaction> transactions) async {
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.Page(
+        build: (pw.Context context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text("Rapport des Transactions", style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 20),
+            pw.Table.fromTextArray(
+              headers: ["Titre", "Montant (€)", "Catégorie", "Date"],
+              data: transactions.map((tx) => [
+                tx.title,
+                tx.amount.toStringAsFixed(2),
+                tx.category,
+                DateFormat('dd/MM/yyyy').format(tx.date)
+              ]).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
     );
   }
 }
