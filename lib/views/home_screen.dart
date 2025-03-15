@@ -1,20 +1,44 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/transaction.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/theme_provider.dart'; // Import du provider de thème
 import 'package:fl_chart/fl_chart.dart';
-import '../models/transaction.dart'; // Import du modèle Transaction
+import 'package:intl/intl.dart'; // Correction : ajout de l'import nécessaire
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final transactions = ref.watch(transactionProvider);
-    final isDarkMode = ref.watch(themeProvider); // Récupérer l'état du mode sombre
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
 
-    // 🔥 Calculer le total des dépenses
-    double totalExpenses = transactions.fold(0, (sum, tx) => sum + tx.amount);
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  String selectedMonth = DateFormat('MMMM yyyy', 'fr_FR').format(DateTime.now()); // Correction : s'assurer que intl est bien utilisé
+
+  @override
+  Widget build(BuildContext context) {
+    final transactions = ref.watch(transactionProvider);
+    final isDarkMode = ref.watch(themeProvider);
+
+    // 📅 Obtenir la liste des mois uniques présents dans les transactions
+    final List<String> months = transactions
+        .map((tx) => DateFormat('MMMM yyyy', 'fr_FR').format(tx.date))
+        .toSet()
+        .toList()
+      ..sort((a, b) => b.compareTo(a));
+    if (months.isEmpty) {
+      months.add(DateFormat('MMMM yyyy', 'fr_FR').format(DateTime.now())); // Ajout du mois actuel si vide
+    }
+
+    // 🔥 Filtrer les transactions en fonction du mois sélectionné
+    final filteredTransactions = transactions.where((tx) {
+      return DateFormat('MMMM yyyy', 'fr_FR').format(tx.date) == selectedMonth;
+    }).toList();
+
+    // 🔥 Calculer le total des dépenses pour le mois sélectionné
+    double totalExpenses =
+    filteredTransactions.fold(0, (sum, tx) => sum + tx.amount);
 
     return Scaffold(
       appBar: AppBar(
@@ -28,11 +52,28 @@ class HomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: transactions.isEmpty
-          ? const Center(child: Text("Aucune transaction enregistrée"))
-          : Column(
+      body: Column(
         children: [
           const SizedBox(height: 10),
+
+          // 🔥 Sélecteur de mois 📅
+          DropdownButton<String>(
+            value: selectedMonth,
+            onChanged: (newValue) {
+              setState(() {
+                selectedMonth = newValue!;
+              });
+            },
+            items: months
+                .map((month) => DropdownMenuItem(
+              value: month,
+              child: Text(month),
+            ))
+                .toList(),
+          ),
+
+          const SizedBox(height: 10),
+
           // 🔥 Affichage du total des dépenses
           Text(
             "Total des dépenses : ${totalExpenses.toStringAsFixed(2)}€",
@@ -41,18 +82,25 @@ class HomeScreen extends ConsumerWidget {
               fontWeight: FontWeight.bold,
             ),
           ),
+
           const SizedBox(height: 10),
+
           // Graphique en camembert
           SizedBox(
             height: 200,
-            child: buildChart(transactions),
+            child: buildChart(filteredTransactions),
           ),
+
           const SizedBox(height: 20),
+
+          // Liste des transactions filtrées
           Expanded(
-            child: ListView.builder(
-              itemCount: transactions.length,
+            child: filteredTransactions.isEmpty
+                ? const Center(child: Text("Aucune transaction pour ce mois."))
+                : ListView.builder(
+              itemCount: filteredTransactions.length,
               itemBuilder: (ctx, index) {
-                final tx = transactions[index];
+                final tx = filteredTransactions[index];
                 return Card(
                   margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   elevation: 3,
@@ -179,7 +227,7 @@ class HomeScreen extends ConsumerWidget {
                 final amount = double.tryParse(amountController.text) ?? 0;
 
                 if (title.isEmpty || amount <= 0) {
-                  return; // Empêche l'ajout si les valeurs sont invalides
+                  return;
                 }
 
                 ref.read(transactionProvider.notifier).addTransaction(
@@ -192,7 +240,7 @@ class HomeScreen extends ConsumerWidget {
                   ),
                 );
 
-                Navigator.of(ctx).pop(); // Ferme la boîte de dialogue
+                Navigator.of(ctx).pop();
               },
               child: const Text("Ajouter"),
             ),

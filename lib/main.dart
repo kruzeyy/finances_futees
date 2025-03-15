@@ -5,9 +5,11 @@ import 'providers/theme_provider.dart';
 import 'providers/transaction_provider.dart';
 import 'models/transaction.dart';
 import 'views/home_screen.dart';
+import 'package:intl/date_symbol_data_local.dart'; // 📌 Import pour l'initialisation des locales
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('fr_FR', null); // 📌 Initialisation de la locale française
   await Hive.initFlutter();
 
   // Enregistrer l'adaptateur pour le modèle Transaction
