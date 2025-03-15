@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive/hive.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/theme_provider.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -15,6 +16,30 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   String selectedMonth = DateFormat('MMMM yyyy', 'fr_FR').format(DateTime.now());
+  double budget = 0.0; // 🔥 Valeur du budget
+  final budgetController = TextEditingController();
+  final FocusNode budgetFocusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBudget();
+  }
+
+  // 🔥 Charger le budget depuis Hive
+  void _loadBudget() async {
+    final box = await Hive.openBox('settings');
+    setState(() {
+      budget = box.get('budget_$selectedMonth', defaultValue: 0.0);
+      budgetController.text = budget.toString();
+    });
+  }
+
+  // 🔥 Sauvegarder le budget dans Hive
+  void _saveBudget() async {
+    final box = await Hive.openBox('settings');
+    box.put('budget_$selectedMonth', budget);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +83,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onChanged: (newValue) {
               setState(() {
                 selectedMonth = newValue!;
+                _loadBudget(); // 🔥 Recharger le budget quand on change de mois
               });
             },
             items: months
@@ -69,6 +95,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
 
           const SizedBox(height: 10),
+
+          // 🔥 Entrée pour définir un budget mensuel
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: budgetController,
+                    decoration: const InputDecoration(labelText: "Budget mensuel (€)"),
+                    keyboardType: TextInputType.number,
+                    onChanged: (value) {
+                      setState(() {
+                        budget = double.tryParse(value) ?? 0.0;
+                      });
+                    },
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.save, color: Colors.green),
+                  onPressed: _saveBudget, // 🔥 Sauvegarde du budget
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 10),
+
+          // 🔥 Alerte si les dépenses dépassent le budget
+          if (budget > 0 && totalExpenses > budget)
+            Padding(
+              padding: const EdgeInsets.all(10.0),
+              child: Text(
+                "⚠️ Alerte : Dépenses dépassant le budget !",
+                style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+              ),
+            ),
 
           Text(
             "Total des dépenses : ${totalExpenses.toStringAsFixed(2)}€",
@@ -134,9 +197,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
     );
   }
-
   // 🔥 Fonction pour afficher un camembert des dépenses avec des couleurs
-  Widget buildChart(List transactions) {
+  Widget buildChart(List<Transaction> transactions) {
     if (transactions.isEmpty) {
       return const Center(child: Text("Aucune donnée disponible"));
     }
@@ -172,7 +234,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
     );
   }
-
   // 🔥 Boîte de dialogue pour modifier une transaction
   void _showEditTransactionDialog(BuildContext context, WidgetRef ref, Transaction transaction) {
     final titleController = TextEditingController(text: transaction.title);
