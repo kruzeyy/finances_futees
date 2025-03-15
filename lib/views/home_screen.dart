@@ -7,10 +7,14 @@ import '../models/transaction.dart'; // Import du modèle Transaction
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final transactions = ref.watch(transactionProvider);
     final isDarkMode = ref.watch(themeProvider); // Récupérer l'état du mode sombre
+
+    // 🔥 Calculer le total des dépenses
+    double totalExpenses = transactions.fold(0, (sum, tx) => sum + tx.amount);
 
     return Scaffold(
       appBar: AppBar(
@@ -19,18 +23,26 @@ class HomeScreen extends ConsumerWidget {
           Switch(
             value: isDarkMode,
             onChanged: (value) {
-              ref.read(themeProvider.notifier).toggleTheme(); // Bascule le mode
+              ref.read(themeProvider.notifier).toggleTheme();
             },
           ),
         ],
       ),
-
       body: transactions.isEmpty
           ? const Center(child: Text("Aucune transaction enregistrée"))
           : Column(
         children: [
-          const SizedBox(height: 20),
-          // Ajout du camembert des dépenses
+          const SizedBox(height: 10),
+          // 🔥 Affichage du total des dépenses
+          Text(
+            "Total des dépenses : ${totalExpenses.toStringAsFixed(2)}€",
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 10),
+          // Graphique en camembert
           SizedBox(
             height: 200,
             child: buildChart(transactions),
@@ -80,11 +92,20 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  // Fonction pour afficher un camembert des dépenses
+  // 🔥 Fonction pour afficher un camembert des dépenses avec des couleurs
   Widget buildChart(List transactions) {
     if (transactions.isEmpty) {
       return const Center(child: Text("Aucune donnée disponible"));
     }
+
+    // Dictionnaire de couleurs pour chaque catégorie
+    final Map<String, Color> categoryColors = {
+      "Courses": Colors.blue,
+      "Transport": Colors.green,
+      "Loisirs": Colors.orange,
+      "Logement": Colors.purple,
+      "Autre": Colors.grey,
+    };
 
     final Map<String, double> categoryTotals = {};
     for (var tx in transactions) {
@@ -96,6 +117,7 @@ class HomeScreen extends ConsumerWidget {
         value: entry.value,
         title: "${entry.key}\n${entry.value.toStringAsFixed(2)}€",
         radius: 50,
+        color: categoryColors[entry.key] ?? Colors.black, // Attribuer la couleur
       );
     }).toList();
 
@@ -109,7 +131,7 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  // Fonction pour afficher la boîte de dialogue d'ajout de transaction
+  // 🔥 Fonction pour afficher la boîte de dialogue d'ajout de transaction
   void _showAddTransactionDialog(BuildContext context, WidgetRef ref) {
     final titleController = TextEditingController();
     final amountController = TextEditingController();
